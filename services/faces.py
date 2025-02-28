@@ -4,10 +4,15 @@ import numpy as np
 import base64
 from pymongo import MongoClient
 from datetime import datetime
+from fastapi import HTTPException
+
 
 client = MongoClient("mongodb+srv://msernaggc:DOMO2025@domo.1fxwg.mongodb.net/?tls=true&tlsAllowInvalidCertificates=true")
 db = client["Domo"] 
 faces_collection = db["faces"]
+
+model_path = os.path.join(os.getcwd(), 'modeloLBPHFace.xml')
+face_recognizer = cv2.face.LBPHFaceRecognizer_create()
 
 def recibir_foto(photos, username): 
     model_path = os.path.join(os.getcwd(), 'modeloLBPHFace.xml')
@@ -62,3 +67,33 @@ def recibir_foto(photos, username):
         print("✅ OK - Imágenes procesadas y guardadas correctamente")
     else:
         print("🚨 No se detectaron rostros o hubo un error en las imágenes")
+
+
+def train_model_function():
+    """ Entrena el modelo de reconocimiento facial con las imágenes almacenadas en MongoDB. """
+    labels, faces_data = [], []
+    label = 0
+
+    face_documents = faces_collection.find()
+    
+    for face_doc in face_documents:
+        img_base64 = face_doc["image_base64"]
+        image_data = base64.b64decode(img_base64)
+        image_array = np.frombuffer(image_data, dtype=np.uint8)
+        img = cv2.imdecode(image_array, cv2.IMREAD_GRAYSCALE)
+
+        if img is None:
+            continue
+
+        faces_data.append(img)
+        labels.append(label)
+
+        label += 1  
+
+    if not faces_data:
+        raise HTTPException(status_code=400, detail="No faces found for training")
+
+    face_recognizer.train(faces_data, np.array(labels))
+    face_recognizer.write(model_path)  
+
+    print("✅ Modelo entrenado exitosamente")
