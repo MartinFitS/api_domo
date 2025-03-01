@@ -50,15 +50,25 @@ def recibir_foto(photos, username):
                 processed = True
                 print(f"✅ Rostros detectados en imagen {index} de {username}")
 
-                face_document = {
-                    "username": username,
-                    "image_base64": photo,  
-                    "date_uploaded": datetime.utcnow(),
-                    "faces_detected": len(faces)  
-                }
+                # Recortar la cara detectada
+                for (x, y, w, h) in faces:
+                    face = img[y:y+h, x:x+w]  # Recorta la cara de la imagen
+                    face_gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)  # Convertir a escala de grises
 
-                faces_collection.insert_one(face_document)
-                print(f"✅ Imagen {index} guardada en MongoDB")
+                    # Codificar la imagen recortada en base64
+                    _, buffer = cv2.imencode('.jpg', face_gray)
+                    face_base64 = base64.b64encode(buffer).decode('utf-8')
+
+                    # Guardar la imagen recortada en la base de datos
+                    face_document = {
+                        "username": username,
+                        "image_base64": face_base64,
+                        "date_uploaded": datetime.utcnow(),
+                        "faces_detected": len(faces)  
+                    }
+
+                    faces_collection.insert_one(face_document)
+                    print(f"✅ Imagen {index} recortada y guardada en MongoDB")
 
         except Exception as e:
             print(f"❌ Error procesando la imagen {index}: {e}")
@@ -67,8 +77,7 @@ def recibir_foto(photos, username):
         print("✅ OK - Imágenes procesadas y guardadas correctamente")
     else:
         print("🚨 No se detectaron rostros o hubo un error en las imágenes")
-
-
+        
 def train_model_function():
     """ Entrena el modelo de reconocimiento facial con las imágenes almacenadas en MongoDB. """
     labels, faces_data = [], []
