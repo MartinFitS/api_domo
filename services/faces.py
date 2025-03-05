@@ -5,11 +5,19 @@ import base64
 from pymongo import MongoClient
 from datetime import datetime
 from fastapi import HTTPException
+from dotenv import load_dotenv
 
 
-client = MongoClient("mongodb+srv://msernaggc:DOMO2025@domo.1fxwg.mongodb.net/?tls=true&tlsAllowInvalidCertificates=true")
-db = client["Domo"] 
-faces_collection = db["faces"]
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI")
+DB = os.getenv("DB_NAME")
+FACES_COLLECTION = os.getenv("COLLECTION_FACES")
+
+
+client = MongoClient(MONGO_URI)
+db = client[DB] 
+faces_collection = db[FACES_COLLECTION]
 
 model_path = os.path.join(os.getcwd(), 'modeloLBPHFace.xml')
 face_recognizer = cv2.face.LBPHFaceRecognizer_create()
@@ -79,14 +87,19 @@ def recibir_foto(photos, username):
         print("🚨 No se detectaron rostros o hubo un error en las imágenes")
         
 def train_model_function():
-    """ Entrena el modelo de reconocimiento facial con las imágenes almacenadas en MongoDB. """
+    """Entrena el modelo de reconocimiento facial con las imágenes almacenadas en MongoDB y asigna labels a los usuarios."""
+    
     labels, faces_data = [], []
-    label = 0
+    label_mapping = {}  # Diccionario para mapear username a label
+    label_counter = 0   # Contador de etiquetas únicas
 
     face_documents = faces_collection.find()
-    
+
     for face_doc in face_documents:
+        username = face_doc["username"]
         img_base64 = face_doc["image_base64"]
+
+        # Decodificar la imagen base64
         image_data = base64.b64decode(img_base64)
         image_array = np.frombuffer(image_data, dtype=np.uint8)
         img = cv2.imdecode(image_array, cv2.IMREAD_GRAYSCALE)
@@ -94,15 +107,88 @@ def train_model_function():
         if img is None:
             continue
 
-        faces_data.append(img)
-        labels.append(label)
+        if username not in label_mapping:
+            label_mapping[username] = label_counter
+            label_counter += 1
 
-        label += 1  
+        labels.append(label_mapping[username])
+        faces_data.append(img)
 
     if not faces_data:
-        raise HTTPException(status_code=400, detail="No faces found for training")
+        raise HTTPException(status_code=400, detail="No hay suficientes rostros para entrenar el modelo")
 
+    model_path = os.path.join(os.getcwd(), 'modeloLBPHFace.xml')
+    face_recognizer = cv2.face.LBPHFaceRecognizer_create()
     face_recognizer.train(faces_data, np.array(labels))
     face_recognizer.write(model_path)  
 
-    print("✅ Modelo entrenado exitosamente")
+    for username, label in label_mapping.items():
+        db["users"].update_one(
+            {"username": username},
+            {"$set": {"label": label}}
+        )
+
+    print("✅ Modelo entrenado exitosamente y labels asignados a los usuarios")
+
+
+def recognize_face(photo_base64):
+    model_path = os.path.join(os.getcwd(), 'modeloLBPHFace.xml')
+    
+    if not os.path.exists(model_path):
+        print("❌ ERROR: Modelo de reconocimiento no encontrado.")
+        raise HTTPException(status_code=500, detail="Modelo de reconocimiento no encontrado. Entrena el modelo primero.")
+
+    face_recognizer = cv2.face.LBPHFaceRecognizer_create()
+    face_recognizer.read(model_path)
+
+    try:
+        image_data = base64.b64decode(photo_base64)
+        image_array = np.frombuffer(image_data, dtype=np.uint8)
+        img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            print("❌ ERROR: No se pudo decodificar la imagen base64.")
+            raise HTTPException(status_code=400, detail="No se pudo decodificar la imagen")
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+        if len(faces) == 0:
+            print("❌ ERROR: No se detectaron rostros en la imagen.")
+            raise HTTPException(status_code=400, detail="No se detectaron rostros en la imagen")
+
+        x, y, w, h = faces[0]
+        face_crop = gray[y:y+h, x:x+w]
+
+        label, confidence = face_recognizer.predict(face_crop)
+
+        print(f"✅ Predicción realizada: Label={label}, Confianza={confidence}")
+
+        CONFIDENCE_THRESHOLD = 70  
+
+        if confidence > CONFIDENCE_THRESHOLD:
+            print(f"❌ Confianza demasiado alta ({confidence}), usuario no reconocido.")
+            raise HTTPException(status_code=401, detail="Usuario no reconocido. Intente de nuevo.")
+
+
+        user_document = db["users"].find_one({"label": label})
+
+        if not user_document:
+            print("❌ ERROR: Usuario no encontrado en la base de datos.")
+            raise HTTPException(status_code=404, detail="Usuario no encontrado en la base de datos")
+        
+        print(user_document)
+
+        return {
+            "username": user_document.get("username"),
+            "devices": user_document.get("devices"),
+            "nombre": user_document.get("name"),
+            "label": label,
+            "confidence": confidence
+        }
+
+    except Exception as e:
+        print(f"❌ ERROR INTERNO: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error en el reconocimiento facial: {str(e)}")

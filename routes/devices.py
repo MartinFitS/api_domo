@@ -1,9 +1,16 @@
 from fastapi import APIRouter, HTTPException
 from pymongo import MongoClient
+import os
+from dotenv import load_dotenv
 
-client = MongoClient("mongodb+srv://msernaggc:DOMO2025@domo.1fxwg.mongodb.net/?tls=true&tlsAllowInvalidCertificates=true")
-db = client["Domo"] 
-devices_collection = db["devices"]
+
+MONGO_URI = os.getenv("MONGO_URI")
+DB = os.getenv("DB_NAME")
+COLLECTION_DEVICES = os.getenv("COLLECTION_DEVICES")
+
+client = MongoClient(MONGO_URI)
+db = client[DB] 
+devices_collection = db[COLLECTION_DEVICES]
 
 router = APIRouter()
 

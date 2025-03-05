@@ -2,13 +2,22 @@ from fastapi import APIRouter, HTTPException
 from pymongo import MongoClient
 from pydantic import BaseModel
 import bcrypt
+from dotenv import load_dotenv
+import os
 import jwt
 from datetime import datetime, timedelta
 
-client = MongoClient("mongodb+srv://msernaggc:DOMO2025@domo.1fxwg.mongodb.net/?tls=true&tlsAllowInvalidCertificates=true")
-db = client["Domo"]
-users_collection = db["users"]
-licenses_collection = db["licencias"]
+
+MONGO_URI = os.getenv("MONGO_URI")
+DB = os.getenv("DB_NAME")
+COLLECTION_USERS = os.getenv("COLLECTION_USERS")
+COLLECTION_LICENCES = os.getenv("COLLECTION_LICENCES")
+
+
+client = MongoClient(MONGO_URI)
+db = client[DB]
+users_collection = db[COLLECTION_USERS]
+licenses_collection = db[COLLECTION_LICENCES]
 
 router = APIRouter()
 

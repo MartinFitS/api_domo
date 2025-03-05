@@ -1,16 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from pymongo import MongoClient
 from typing import List
-from services.faces import recibir_foto, train_model_function
-
-client = MongoClient("mongodb+srv://msernaggc:DOMO2025@domo.1fxwg.mongodb.net/?tls=true&tlsAllowInvalidCertificates=true")
-db = client["Domo"]
-faces_collection = db["faces"]
-
-
+from services.faces import recibir_foto, train_model_function,recognize_face
 
 router = APIRouter()
+
+class FaceLoginRequest(BaseModel):
+    img: str  
 
 class ImageData(BaseModel):
     image_base64: str
@@ -43,13 +39,22 @@ def train_model():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/get-image/{username}")
-async def get_image(username: str):
-    # Buscar la imagen del usuario en la base de datos
-    user_image = faces_collection.find_one({"username": username})
 
-    if not user_image:
-        raise HTTPException(status_code=404, detail="Imagen no encontrada")
-    
-    # Devolver la imagen en base64
-    return {"image_base64": user_image["image_base64"]}
+@router.post("/login/face")
+async def login_face(request: FaceLoginRequest):
+    try:
+        user_data = recognize_face(request.img)  # Llamamos a la función de reconocimiento
+        print(user_data)
+
+        if not user_data:
+            raise HTTPException(status_code=401, detail="No se pudo autenticar al usuario")
+
+        return {
+            "message": "Usuario autenticado exitosamente",
+            "user": user_data
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
