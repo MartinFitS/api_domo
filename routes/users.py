@@ -42,6 +42,7 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes
 
 @router.post("/create-user")
 def create_user(user: UserCreate):
+    print(user)
     if users_collection.find_one({"username": user.username}):
         raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
 
