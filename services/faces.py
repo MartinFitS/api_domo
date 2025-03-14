@@ -166,11 +166,17 @@ def recognize_face(photo_base64):
 
         print(f"✅ Predicción realizada: Label={label}, Confianza={confidence}")
 
-        CONFIDENCE_THRESHOLD = 70  
+        CONFIDENCE_THRESHOLD_HIGH = 80
 
-        if confidence > CONFIDENCE_THRESHOLD:
-            print(f"❌ Confianza demasiado alta ({confidence}), usuario no reconocido.")
-            raise HTTPException(status_code=401, detail="Usuario no reconocido. Intente de nuevo.")
+        print(confidence)
+
+        try:
+            if confidence > CONFIDENCE_THRESHOLD_HIGH:
+                print(f"❌ Confianza demasiado alta ({confidence}), usuario no reconocido.")
+                raise HTTPException(status_code=401, detail="Usuario no reconocido. Intente de nuevo.")
+        except HTTPException as e:
+            print(f"❌ ERROR INTERNO: {e.status_code}: {e.detail}")
+            raise e
 
 
         user_document = db["users"].find_one({"label": label})
