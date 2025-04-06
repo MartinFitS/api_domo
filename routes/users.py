@@ -77,3 +77,5 @@ def create_user(user: UserCreate):
     return {"message": "Usuario creado exitosamente", "access_token": access_token}
 
 
+
+#uvicorn main:app --host 0.0.0.0 --port 8000 --reload

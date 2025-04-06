@@ -166,7 +166,7 @@ def recognize_face(photo_base64):
 
         print(f"✅ Predicción realizada: Label={label}, Confianza={confidence}")
 
-        CONFIDENCE_THRESHOLD_HIGH = 80
+        CONFIDENCE_THRESHOLD_HIGH = 85
 
         print(confidence)
 
